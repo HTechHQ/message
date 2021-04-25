@@ -60,7 +60,11 @@ provides an in memory reference implementation.
 
 ## The Interface
 ```go
-
+type PubSub interface {
+	Publish(topic Topic, msg Message) error
+	Subscribe(topic Topic, h HandlerFunc) (*Subscriber, error)
+	Shutdown(ctx context.Context)
+}
 ```
 
 
