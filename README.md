@@ -1,6 +1,6 @@
 [![Test Build][github-action-shield]][github-action-url]
-[![Coverage Status][coveralls-shild]][coveralls-url]
-[![Go Report Card][reportcard-shild]][reportcard-url]
+[![Coverage Status][coveralls-shield]][coveralls-url]
+[![Go Report Card][reportcard-shield]][reportcard-url]
 [![Issues][issues-shield]][issues-url]
 [![Issues][stars-shield]][stars-url]
 
