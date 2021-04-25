@@ -60,13 +60,80 @@ provides an in memory reference implementation.
 
 ## The Interface
 ```go
-
+type PubSub interface {
+	Publish(topic Topic, msg Message) error
+	Subscribe(topic Topic, h HandlerFunc) (*Subscriber, error)
+	Shutdown(ctx context.Context)
+}
 ```
 
 
 
 
 ## Examples
+[Publish-Subscribe with primitive data types](examples/pubsub-primitive/main.go)
+```go
+func main() {
+    c := message.NewPubsubMem()
+
+    sub, _ := c.Subscribe("topic-name", func(msg []byte) {
+        fmt.Println(string(msg))
+    })
+
+    c.Publish("topic-name", []byte("hello world!"))
+    sub.Unsubscribe()
+    c.Publish("topic-name", []byte("hello world!"))
+
+    c.Shutdown(context.TODO())
+    // output: hello world!
+}
+```
+
+
+[Publish-Subscribe with domain events](examples/pubsub-events/main.go)
+```go
+func main() {
+	c := message.NewPubsubMem()
+	topic := "user-registration"
+
+	c.Subscribe(topic, func(e newUserAuditLogEvent) {
+		fmt.Println(e.Username, e.Settings, e.CreatedAt.Format("2006.01.02"))
+	})
+	c.Subscribe(topic, func(e newUserWelcomeEmailEvent) {
+		fmt.Println(e.Name, e.Email)
+	})
+
+	c.Publish(topic, newUserRegisteredEvent{
+		Username:  "Max",
+		Email:     "max@example.com",
+		CreatedAt: time.Now(),
+		Settings:  []string{"setting"},
+	})
+
+	c.Shutdown(context.TODO())
+	// output:
+	// Max [setting] 2021.04.25
+	// Max max@example.com
+}
+
+type newUserRegisteredEvent struct {
+   Username  string
+   Email     string
+   CreatedAt time.Time
+   Settings  []string
+}
+
+type newUserAuditLogEvent struct {
+   Username  string
+   CreatedAt time.Time
+   Settings  []string
+}
+
+type newUserWelcomeEmailEvent struct {
+   Name  string `json:"UserName"`
+   Email string
+}
+```
 
 
 
@@ -76,7 +143,7 @@ Depending on your needs a persistent implementation, relying on something like
 NATS or Redis, might be good to support your desired semantics 
 like at-least-once-delivery. PR welcome.
 
-Also working on an expansion to a queue.
+Also working on metrics and a queue expansion.
 \
 \
 See the [open issues](https://github.com/HTechHQ/message/issues) for a list of proposed features (and known issues).
