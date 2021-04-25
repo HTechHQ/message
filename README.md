@@ -1,4 +1,4 @@
-[![Test Build][github-action-shield]]
+[![Test Build][github-action-shield]][github-action-url]
 [![Coverage Status][coveralls-shild]][coveralls-url]
 [![Go Report Card][reportcard-shild]][reportcard-url]
 [![Issues][issues-shield]][issues-url]
@@ -168,3 +168,4 @@ See the [open issues](https://github.com/HTechHQ/message/issues) for a list of p
 [coveralls-shield]: https://coveralls.io/repos/github/HTechHQ/message/badge.svg?branch=master
 [coveralls-url]: https://coveralls.io/github/HTechHQ/message?branch=master
 [github-action-shield]: https://github.com/HTechHQ/message/actions/workflows/test.yml/badge.svg
+[github-action-url]: https://github.com/HTechHQ/message/actions
