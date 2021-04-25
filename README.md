@@ -1,4 +1,6 @@
-
+[![Test Build][github-action-shield]]
+[![Coverage Status][coveralls-shild]][coveralls-url]
+[![Go Report Card][reportcard-shild]][reportcard-url]
 [![Issues][issues-shield]][issues-url]
 [![Issues][stars-shield]][stars-url]
 
@@ -71,6 +73,11 @@ type PubSub interface {
 
 
 ## Examples
+```shell
+$ go get -u github.com/HTechHQ/message
+```
+
+
 [Publish-Subscribe with primitive data types](examples/pubsub-primitive/main.go)
 ```go
 func main() {
@@ -156,3 +163,8 @@ See the [open issues](https://github.com/HTechHQ/message/issues) for a list of p
 [issues-url]: https://github.com/HTechHQ/message/issues
 [stars-shield]: https://img.shields.io/github/stars/HTechHQ/message?style=flat-square&logo=appveyor
 [stars-url]: https://github.com/HTechHQ/message/stargazers
+[reportcard-shield]: https://goreportcard.com/badge/github.com/HTechHQ/message
+[reportcard-url]: https://goreportcard.com/report/github.com/HTechHQ/message
+[coveralls-shield]: https://coveralls.io/repos/github/HTechHQ/message/badge.svg?branch=master
+[coveralls-url]: https://coveralls.io/github/HTechHQ/message?branch=master
+[github-action-shield]: https://github.com/HTechHQ/message/actions/workflows/test.yml/badge.svg

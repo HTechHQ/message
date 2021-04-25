@@ -1,4 +1,4 @@
-// message is an (opinionated) interface intended to be copied into your project.
+// Package message is an (opinionated) interface intended to be copied into your project.
 //
 // As a project matures, requirements and the technical
 // environment evolve, it is painful to realise that deeply embedded
