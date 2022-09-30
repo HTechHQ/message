@@ -22,13 +22,13 @@ test-unit:
 
 .PHONY: test
 test: static-check ## Run all tests without any cache
-	go test -race ./... -count=1 -coverprofile cover.out
-	go tool cover -func cover.out | grep total:
+	go test -race ./... -count=1 -coverprofile coverage.out
+	go tool cover -func coverage.out | grep total:
 
 
 
 
 .PHONY: show-cover
 show-cover:
-	go tool cover -html=cover.out -o cover.html
-	xdg-open cover.html
+	go tool cover -html=coverage.out -o coverage.html
+	xdg-open coverage.html

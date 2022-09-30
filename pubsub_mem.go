@@ -26,19 +26,26 @@ type PubsubMem struct {
 
 var _ PubSub = (*PubsubMem)(nil)
 
-// NewPubsubMem initialises a new instance of a in memory implementation of the PubSub interface.
+// NewPubsubMem initialises a new instance of an in memory implementation of the PubSub interface.
 func NewPubsubMem() *PubsubMem {
-	m := &PubsubMem{}
-	m.subs = make(map[string][]*Subscriber)
+	m := &PubsubMem{
+		mu:   sync.Mutex{},
+		wg:   sync.WaitGroup{},
+		subs: make(map[string][]*Subscriber),
+	}
 
 	return m
+}
+
+func (mm *PubsubMem) NumSubs(topic string) int {
+	return len(mm.subs[topic])
 }
 
 func (mm *PubsubMem) Publish(topic string, msg Message) error {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 
-	var err error
+	var err *multierror.Error
 
 	for _, s := range mm.subs[topic] {
 		handlerFuncType := reflect.TypeOf(s.h)
@@ -56,7 +63,7 @@ func (mm *PubsubMem) Publish(topic string, msg Message) error {
 			continue
 		}
 
-		switch paramType.Kind() {
+		switch paramType.Kind() { //nolint:exhaustive
 		case reflect.Struct:
 			if reflect.TypeOf(msg).Kind() != reflect.Struct {
 				break
@@ -88,7 +95,7 @@ func (mm *PubsubMem) Publish(topic string, msg Message) error {
 		err = multierror.Append(err, ErrParamConversionFailed)
 	}
 
-	return err
+	return err.ErrorOrNil() //nolint:wrapcheck // allow the multierror to be returned.
 }
 
 func (mm *PubsubMem) Subscribe(topic string, h HandlerFunc) (*Subscriber, error) {

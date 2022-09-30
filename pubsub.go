@@ -15,7 +15,7 @@ type (
 	// The message will be automatically converted from the publisher's type to the subscriber's type.
 	Message interface{}
 
-	// HandlerFunc is the subscribers handler and must have the signature: func(arg Message) {}
+	// HandlerFunc is the subscribers handler and must have the signature: func(arg Message) {}.
 	HandlerFunc interface{}
 )
 
