@@ -228,7 +228,7 @@ func TestMagic_mem_Publish(t *testing.T) {
 			b  safeBuffer
 		)
 
-		const wantedPublisher = 10000
+		const wantedPublisher = 1000
 
 		c := message.NewPubsubMem()
 
