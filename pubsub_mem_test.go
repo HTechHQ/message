@@ -324,7 +324,7 @@ func TestMagic_mem_Shutdown(t *testing.T) {
 
 		hasProcessed := false
 		_, _ = c.Subscribe(validTopic, func(msg []byte) {
-			time.Sleep(20 * time.Second)
+			time.Sleep(2 * time.Second)
 			hasProcessed = true
 		})
 
@@ -344,7 +344,7 @@ func TestMagic_mem_Shutdown(t *testing.T) {
 
 		hasProcessed := false
 		_, _ = c.Subscribe(validTopic, func(msg []byte) {
-			time.Sleep(20 * time.Second)
+			time.Sleep(2 * time.Second)
 			hasProcessed = true
 		})
 
