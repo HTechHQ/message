@@ -13,66 +13,128 @@ import (
 	"github.com/HTechHQ/message"
 )
 
-const (
-	validTopic   = "1337"
-	validMessage = "message"
-)
-
 func TestMagic_mem_Subscribe(t *testing.T) {
 	t.Parallel()
+
+	t.Run("fail, if EventOrMessage is invalid", func(t *testing.T) {
+		t.Parallel()
+
+		c := message.NewPubsubMem()
+
+		// invalid EventOrMessage parameters
+		_, err := c.Subscribe(nil, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = c.Subscribe("", validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = c.Subscribe(0, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = c.Subscribe([]int{}, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = c.Subscribe(struct{}{}, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = c.Subscribe(struct{ name string }{}, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		// valid EventOrMessage parameters
+		_, err = c.Subscribe(simpleEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+
+		_, err = c.Subscribe(eventOrTopicStructEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+
+		_, err = c.Subscribe(validSliceEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+	})
+
+	t.Run("subscribe via an implemented EventOrTopic-interface name", func(t *testing.T) {
+		t.Parallel()
+
+		c := message.NewPubsubMem()
+
+		_, err := c.Subscribe(eventOrTopicStructEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, c.NumSubs(eventOrTopicStructEvent{}))
+	})
+
+	t.Run("subscribe via an struct type as name", func(t *testing.T) {
+		t.Parallel()
+
+		c := message.NewPubsubMem()
+
+		_, err := c.Subscribe(simpleEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, c.NumSubs(simpleEvent{}))
+	})
+
+	t.Run("ensure HandlerFunc is func and signature has two arguments with first ctx and no returns", func(t *testing.T) {
+		t.Parallel()
+
+		c := message.NewPubsubMem()
+
+		_, err := c.Subscribe(simpleEvent{}, 0)
+		assert.Error(t, err)
+
+		_, err = c.Subscribe(simpleEvent{}, "")
+		assert.Error(t, err)
+
+		_, err = c.Subscribe(simpleEvent{}, func() {})
+		assert.Error(t, err)
+
+		_, err = c.Subscribe(simpleEvent{}, func(msg []byte, str string) {})
+		assert.Error(t, err)
+
+		_, err = c.Subscribe(simpleEvent{}, func(ctx context.Context, event simpleEvent) int { return 0 })
+		assert.Error(t, err)
+
+		_, err = c.Subscribe(simpleEvent{}, func(ctx context.Context, event simpleEvent) {})
+		assert.NoError(t, err)
+	})
 
 	t.Run("subscribe 3 handlers to the same topic", func(t *testing.T) {
 		t.Parallel()
 
 		c := message.NewPubsubMem()
 
-		_, err0 := c.Subscribe(validTopic, func(msg []int) {})
-		_, err1 := c.Subscribe(validTopic, func(msg []byte) {})
-		_, err2 := c.Subscribe(validTopic, func(msg []string) {})
+		_, err0 := c.Subscribe(simpleEvent{}, func(ctx context.Context, msg []int) {})
+		_, err1 := c.Subscribe(simpleEvent{}, func(ctx context.Context, msg []byte) {})
+		_, err2 := c.Subscribe(simpleEvent{}, func(ctx context.Context, msg []string) {})
 
 		assert.NoError(t, err0)
 		assert.NoError(t, err1)
 		assert.NoError(t, err2)
-		assert.Equal(t, 3, c.NumSubs(validTopic))
-	})
-
-	t.Run("ensure HandlerFunc is func and signature has one argument and no returns", func(t *testing.T) {
-		t.Parallel()
-
-		c := message.NewPubsubMem()
-
-		_, err := c.Subscribe(validTopic, 0)
-		assert.Error(t, err)
-
-		_, err = c.Subscribe(validTopic, func() {})
-		assert.Error(t, err)
-
-		_, err = c.Subscribe(validTopic, func(msg []byte, str string) {})
-		assert.Error(t, err)
-
-		_, err = c.Subscribe(validTopic, func(msg []byte) int { return 0 })
-		assert.Error(t, err)
+		assert.Equal(t, 3, c.NumSubs(simpleEvent{}))
 	})
 
 	t.Run("subscribe safely concurrently", func(t *testing.T) {
 		t.Parallel()
 
+		var wg sync.WaitGroup
+
 		const wantedSubscribers = 1000
 
 		c := message.NewPubsubMem()
 
-		var wg sync.WaitGroup
-
 		wg.Add(wantedSubscribers)
 		for i := 0; i < wantedSubscribers; i++ {
 			go func(wg *sync.WaitGroup) {
-				_, _ = c.Subscribe(validTopic, func(msg []byte) {})
+				_, _ = c.Subscribe(simpleEvent{}, func(ctx context.Context, msg []byte) {})
 				wg.Done()
 			}(&wg)
 		}
 		wg.Wait()
 
-		assert.Equal(t, wantedSubscribers, c.NumSubs(validTopic))
+		assert.Equal(t, wantedSubscribers, c.NumSubs(simpleEvent{}))
 	})
 }
 
@@ -92,7 +154,7 @@ func TestMagic_mem_Publish(t *testing.T) {
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = c.Publish(validCtx, []byte(validMessage))
 
 		wg.Wait()
 	})
@@ -114,7 +176,7 @@ func TestMagic_mem_Publish(t *testing.T) {
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = c.Publish(validCtx, []byte(validMessage))
 
 		wg.Wait()
 	})
@@ -140,9 +202,9 @@ func TestMagic_mem_Publish(t *testing.T) {
 		})
 		_, _ = c.Subscribe(validTopic, func(msg []byte) {})
 
-		err0 := c.Publish(validTopic, []byte("."))
-		err1 := c.Publish(validTopic, ".")
-		err2 := c.Publish(validTopic, 1)
+		err0 := c.Publish(validCtx, []byte("."))
+		err1 := c.Publish(validCtx, ".")
+		err2 := c.Publish(validCtx, 1)
 
 		wg.Wait()
 
@@ -186,7 +248,7 @@ func TestMagic_mem_Publish(t *testing.T) {
 			wg.Done()
 		})
 
-		err := c.Publish(validTopic, newUserRegisteredEvent{
+		err := c.Publish(validCtx, newUserRegisteredEvent{
 			Username:  "user name",
 			Email:     "test@example.com",
 			CreatedAt: now,
@@ -213,7 +275,7 @@ func TestMagic_mem_Publish(t *testing.T) {
 			wg.Done()
 		})
 
-		err := c.Publish(validTopic, []byte(validMessage))
+		err := c.Publish(validCtx, []byte(validMessage))
 
 		wg.Wait()
 		assert.Error(t, err)
@@ -240,7 +302,7 @@ func TestMagic_mem_Publish(t *testing.T) {
 		wg.Add(wantedPublisher)
 		for i := 0; i < wantedPublisher; i++ {
 			go func() {
-				_ = c.Publish(validTopic, []byte("."))
+				_ = c.Publish(validCtx, []byte("."))
 			}()
 		}
 
@@ -268,7 +330,7 @@ func TestMagic_mem_Publish(t *testing.T) {
 		wg.Add(wantedPublisher)
 		for i := 0; i < wantedPublisher; i++ {
 			go func() {
-				_ = c.Publish(validTopic, []byte("."))
+				_ = c.Publish(validCtx, []byte("."))
 				wg.Done()
 			}()
 		}
@@ -284,8 +346,8 @@ func BenchmarkMagic_mem_Publish(b *testing.B) {
 	})
 
 	for i := 0; i < b.N; i++ {
-		_ = c.Publish(validTopic, []byte(""))
-		_ = c.Publish(validTopic, newUserRegisteredEvent{})
+		_ = c.Publish(validCtx, []byte(""))
+		_ = c.Publish(validCtx, newUserRegisteredEvent{})
 	}
 }
 
@@ -310,8 +372,8 @@ func TestMagic_mem_Shutdown(t *testing.T) {
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
-		_ = c.Publish(validTopic, newUserRegisteredEvent{Username: "user"})
+		_ = c.Publish(validCtx, []byte(validMessage))
+		_ = c.Publish(validCtx, newUserRegisteredEvent{Username: "user"})
 
 		c.Shutdown(context.TODO())
 		wg.Wait()
@@ -328,7 +390,7 @@ func TestMagic_mem_Shutdown(t *testing.T) {
 			hasProcessed = true
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = c.Publish(validCtx, []byte(validMessage))
 
 		ctxShutDown, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 		c.Shutdown(ctxShutDown)
@@ -348,7 +410,7 @@ func TestMagic_mem_Shutdown(t *testing.T) {
 			hasProcessed = true
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = c.Publish(validCtx, []byte(validMessage))
 
 		for i := 0; i < 5; i++ {
 			go func(i int) {
@@ -385,9 +447,9 @@ func TestSubscriber_Unsubscribe(t *testing.T) {
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = c.Publish(validCtx, []byte(validMessage))
 		sub.Unsubscribe()
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = c.Publish(validCtx, []byte(validMessage))
 
 		wg.Wait()
 		assert.Equal(t, validMessage, b.String())
@@ -449,7 +511,7 @@ func BenchmarkThrouputMagicMem(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func() {
-			_ = c.Publish(topic(), []byte(""))
+			_ = c.Publish(validCtx, []byte(""))
 		}()
 	}
 }
