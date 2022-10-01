@@ -11,7 +11,7 @@
   <h2 align="center">Message Interface</h2>
 
   <p align="center">
-    An interface to add messages to your Go projects!
+    An interface to add domain events and messages to your Go projects!
     <br />
     <br />
     <a href="https://github.com/HTechHQ/message#examples">View Examples</a>
@@ -30,6 +30,8 @@
 As a project matures, requirements and the technical 
 environment evolve, it is painful to realise that deeply embedded
 dependencies like loggers or message systems have to be replaced.
+This is especially true for Go, that is not offering standard
+abstractions for these use cases.
 Thus, it is a helpful practise to hide external libraries behind an
 application specific interface.
 
@@ -54,7 +56,7 @@ provides an in memory reference implementation.
    With an emphasis on development speed and readable code 
    this interface improves upon the pattern often seen with other libraries:
    marshalling and unmarshalling the message to and from `[]byte`.
-   This clutters the use cases with serialisation logic 
+   This clutters your code with serialisation logic 
    and can be hidden behind an interface.
 
 
