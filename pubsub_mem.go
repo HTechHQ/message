@@ -189,7 +189,7 @@ func getEventOrTopicName(eom EventOrMessage) (EventOrTopicName, error) {
 
 	eot, ok := eom.(EventOrTopic)
 	if ok {
-		return eot.Name(), nil
+		return eot.EventOrTopicName(), nil
 	}
 
 	// ensure primitive data types like string or int are not allowed

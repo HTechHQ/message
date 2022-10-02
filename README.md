@@ -80,7 +80,7 @@ $ go get -u github.com/HTechHQ/message
 ```
 
 
-[Publish-Subscribe with primitive data types](examples/pubsub-primitive/main.go)
+[Publish-Subscribe with primitive data types](examples/pubsub-message/main.go)
 ```go
 func main() {
     c := message.NewPubsubMem()

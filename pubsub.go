@@ -18,7 +18,7 @@ type (
 	// EventOrTopic returns the EventOrTopicName of an EventOrMessage. It is optional and does not have to be
 	// implemented by each EventOrMessage. If it's not implemented the struct type is used as EventOrTopicName instead.
 	EventOrTopic interface {
-		Name() EventOrTopicName
+		EventOrTopicName() EventOrTopicName
 	}
 
 	// EventOrMessage is an event or message passed between publishers and subscribers.

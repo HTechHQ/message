@@ -52,30 +52,30 @@ type (
 	}
 
 	shareNothingWithEvents struct {
-		Name2 string `json:"name,omitempty"`
+		Name string `json:"name,omitempty"`
 	}
 )
 
-func (e eventOrTopicStructEvent) Name() message.EventOrTopicName {
-	return "eventOrTopicStructEvent.Name"
+func (e eventOrTopicStructEvent) EventOrTopicName() message.EventOrTopicName {
+	return "eventOrTopicStructEvent.EventOrTopicName"
 }
 
-func (e validSliceEvent) Name() message.EventOrTopicName {
-	return "validSliceEvent.Name"
+func (e validSliceEvent) EventOrTopicName() message.EventOrTopicName {
+	return "validSliceEvent.EventOrTopicName"
 }
 
-func (e newUserRegisteredEvent) Name() message.EventOrTopicName {
+func (e newUserRegisteredEvent) EventOrTopicName() message.EventOrTopicName {
 	return sharedTopicName
 }
 
-func (e newUserAuditLogEvent) Name() message.EventOrTopicName {
+func (e newUserAuditLogEvent) EventOrTopicName() message.EventOrTopicName {
 	return sharedTopicName
 }
 
-func (e newUserWelcomeEmailEvent) Name() message.EventOrTopicName {
+func (e newUserWelcomeEmailEvent) EventOrTopicName() message.EventOrTopicName {
 	return sharedTopicName
 }
 
-func (e shareNothingWithEvents) Name() message.EventOrTopicName {
+func (e shareNothingWithEvents) EventOrTopicName() message.EventOrTopicName {
 	return sharedTopicName
 }
