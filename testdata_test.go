@@ -1,4 +1,4 @@
-// and unvalid testdata for all tests to use for convenience.
+// Valid and invalid testdata for all tests to use for convenience.
 //
 //nolint:gochecknoglobals // allow globals in tests. The purpose of this file is to provide a wide range of valid
 package message_test
@@ -11,16 +11,14 @@ import (
 )
 
 const (
-	validTopic   = "1337"
-	validMessage = "message"
-
 	wantedSubscribers = 1000
 	wantedPublishers  = 1000
+
+	sharedTopicName = "shared.topic.name"
 )
 
 var (
-	ctx = context.Background()
-
+	ctx                   = context.Background()
 	validEmptyHandlerFunc = func(ctx context.Context, e string) {}
 )
 
@@ -51,7 +49,7 @@ type (
 	}
 
 	shareNothingWithEvents struct {
-		Name string `json:"name,omitempty"`
+		Name2 string `json:"name,omitempty"`
 	}
 )
 
@@ -61,4 +59,20 @@ func (e eventOrTopicStructEvent) Name() message.EventOrTopicName {
 
 func (e validSliceEvent) Name() message.EventOrTopicName {
 	return "validSliceEvent.Name"
+}
+
+func (e newUserRegisteredEvent) Name() message.EventOrTopicName {
+	return sharedTopicName
+}
+
+func (e newUserAuditLogEvent) Name() message.EventOrTopicName {
+	return sharedTopicName
+}
+
+func (e newUserWelcomeEmailEvent) Name() message.EventOrTopicName {
+	return sharedTopicName
+}
+
+func (e shareNothingWithEvents) Name() message.EventOrTopicName {
+	return sharedTopicName
 }

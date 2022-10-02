@@ -2,7 +2,6 @@ package message_test
 
 import (
 	"context"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -179,86 +178,66 @@ func TestMagic_mem_Publish(t *testing.T) {
 
 		wg.Wait()
 	})
-	/*
-		t.Run("ensure automatic parameter casting", func(t *testing.T) {
-			t.Parallel()
 
-			var (
-				wg sync.WaitGroup
-				mu sync.Mutex
-				b  bytes.Buffer
-			)
+	t.Run("ensure ctx is handed over from publisher to subscriber", func(t *testing.T) {
+		t.Parallel()
 
-			c := message.NewPubsubMem()
+		var wg sync.WaitGroup
 
-			wg.Add(2)
-			_, _ = c.Subscribe(validTopic, func(msg []byte) {
-				mu.Lock()
-				defer mu.Unlock()
+		p := message.NewPubsubMem()
 
-				b.Write(msg)
-				wg.Done()
-			})
-			_, _ = c.Subscribe(validTopic, func(msg []byte) {})
-
-			err0 := c.Publish(ctx, []byte("."))
-			err1 := c.Publish(ctx, ".")
-			err2 := c.Publish(ctx, 1)
-
-			wg.Wait()
-
-			assert.NoError(t, err0)
-			assert.NoError(t, err1)
-
-			assert.Error(t, err2)
-			assert.Contains(t, err2.Error(), "2 errors occurred")
-
-			assert.Equal(t, "..", b.String())
+		wg.Add(1)
+		_, _ = p.Subscribe(simpleStruct{}, func(ctx context.Context, e simpleStruct) {
+			assert.Equal(t, "value", ctx.Value("key"))
+			wg.Done()
 		})
-	*/
-	/*
-		t.Run("ensure structs are converted", func(t *testing.T) {
-			t.Parallel()
 
-			var wg sync.WaitGroup
+		ctxWithVal := context.WithValue(context.Background(), "key", "value")
+		_ = p.Publish(ctxWithVal, simpleStruct{})
 
-			c := message.NewPubsubMem()
+		wg.Wait()
+	})
 
-			now, _ := time.Parse(time.RFC822, "01 Jan 15 10:00 UTC")
+	t.Run("ensure structs are converted, once they have the same EventOrTopic name", func(t *testing.T) {
+		t.Parallel()
 
-			wg.Add(4)
-			_, _ = c.Subscribe(newUserRegisteredEvent{}, func(ctx context.Context, e newUserRegisteredEvent) {
-				assert.Equal(t, "user name", e.Username)
-				assert.Equal(t, "test@example.com", e.Email)
-				assert.Equal(t, []string{"s0", "s1"}, e.Settings)
-				wg.Done()
-			})
-			_, _ = c.Subscribe(newUserAuditLogEvent{}, func(ctx context.Context, e newUserAuditLogEvent) {
-				assert.Equal(t, "user name", e.Username)
-				assert.Equal(t, now, e.CreatedAt)
-				wg.Done()
-			})
-			_, _ = c.Subscribe(newUserWelcomeEmailEvent{}, func(ctx context.Context, e newUserWelcomeEmailEvent) {
-				assert.Equal(t, "user name", e.Username)
-				assert.Equal(t, "test@example.com", e.Email)
-				wg.Done()
-			})
-			_, _ = c.Subscribe(shareNothingWithEvents{}, func(ctx context.Context, e shareNothingWithEvents) {
-				assert.Equal(t, shareNothingWithEvents{}, e)
-				wg.Done()
-			})
+		var wg sync.WaitGroup
+		now, _ := time.Parse(time.RFC822, "01 Jan 15 10:00 UTC")
 
-			err := c.Publish(ctx, newUserRegisteredEvent{
-				Username:  "user name",
-				Email:     "test@example.com",
-				CreatedAt: now,
-				Settings:  []string{"s0", "s1"},
-			})
+		p := message.NewPubsubMem()
 
-			assert.Equal(t, nil, err)
-			wg.Wait()
+		wg.Add(4)
+		_, _ = p.Subscribe(newUserRegisteredEvent{}, func(ctx context.Context, e newUserRegisteredEvent) {
+			assert.Equal(t, "user name", e.Username)
+			assert.Equal(t, "test@example.com", e.Email)
+			assert.Equal(t, []string{"s0", "s1"}, e.Settings)
+			wg.Done()
 		})
-	*/
+		_, _ = p.Subscribe(newUserAuditLogEvent{}, func(ctx context.Context, e newUserAuditLogEvent) {
+			assert.Equal(t, "user name", e.Username)
+			assert.Equal(t, now, e.CreatedAt)
+			wg.Done()
+		})
+		_, _ = p.Subscribe(newUserWelcomeEmailEvent{}, func(ctx context.Context, e newUserWelcomeEmailEvent) {
+			assert.Equal(t, "user name", e.Username)
+			assert.Equal(t, "test@example.com", e.Email)
+			wg.Done()
+		})
+		_, _ = p.Subscribe(shareNothingWithEvents{}, func(ctx context.Context, e shareNothingWithEvents) {
+			assert.Equal(t, shareNothingWithEvents{}, e)
+			wg.Done()
+		})
+
+		err := p.Publish(ctx, newUserRegisteredEvent{
+			Username:  "user name",
+			Email:     "test@example.com",
+			CreatedAt: now,
+			Settings:  []string{"s0", "s1"},
+		})
+
+		assert.Equal(t, nil, err)
+		wg.Wait()
+	})
 
 	t.Run("publish safely concurrently", func(t *testing.T) {
 		t.Parallel()
@@ -500,23 +479,3 @@ func TestSubscriber_Unsubscribe(t *testing.T) {
 		}
 	}
 */
-func getRandomTopic() func() string {
-	mu := sync.Mutex{}
-	t := []string{"s", "e", "e", "d"}
-
-	return func() string {
-		mu.Lock()
-
-		/*r := rand.Int()
-		neuTopic := strconv.Itoa(r)
-
-		if r%100 == 0 {
-			t = append(t, neuTopic)
-		}*/
-		elem := t[rand.Intn(len(t))] //nolint:gosec
-
-		mu.Unlock()
-
-		return elem
-	}
-}
