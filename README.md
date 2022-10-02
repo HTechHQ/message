@@ -99,7 +99,7 @@ func main() {
 ```
 
 
-[Publish-Subscribe with domain events](examples/pubsub-events/main.go)
+[Publish-Subscribe with domain events](examples/pubsub-events-conversion/main.go)
 ```go
 func main() {
 	c := message.NewPubsubMem()

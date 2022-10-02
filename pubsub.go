@@ -22,10 +22,12 @@ type (
 	}
 
 	// EventOrMessage is an event or message passed between publishers and subscribers.
-	// The type of EventOrMessage will be automatically converted from the publisher's type to the subscriber's type.
+	// The type of EventOrMessage has to be a named struct and will be automatically converted
+	// from the publisher's type to the subscriber's type, if they share a EventOrTopicName.
 	EventOrMessage interface{}
 
-	// HandlerFunc is the subscribers handler and must have the signature: func(ctx context.Context, e EventOrMessage) {}.
+	// HandlerFunc is the subscriber's handler and must have the signature:
+	// func(ctx context.Context, eom EventOrMessage) {}.
 	// HandlerFunc can not be more specific in this definition, so that each call to Subscribe() can give the most
 	// specific parameter list, it wants to use for its domain.
 	HandlerFunc interface{}

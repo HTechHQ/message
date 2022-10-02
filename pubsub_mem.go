@@ -47,20 +47,23 @@ func (mm *PubsubMem) Publish(ctx context.Context, msg EventOrMessage) error {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 
-	topic := msg.(EventOrTopic).Name()
+	topic, err := getEventOrTopicName(msg)
+	if err != nil {
+		return err
+	}
 
-	var err *multierror.Error
+	var mErr *multierror.Error
 
 	for _, s := range mm.subs[topic] {
 		handlerFuncType := reflect.TypeOf(s.h)
-		paramType := handlerFuncType.In(0)
+		paramType := handlerFuncType.In(1)
 
 		if reflect.TypeOf(msg).ConvertibleTo(paramType) {
 			mm.wg.Add(1)
 
 			go func(h HandlerFunc, handlerFuncType reflect.Type, msg EventOrMessage, paramType reflect.Type) {
 				fn := reflect.ValueOf(h).Convert(handlerFuncType)
-				fn.Call([]reflect.Value{reflect.ValueOf(msg).Convert(paramType)})
+				fn.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(msg).Convert(paramType)})
 				mm.wg.Done()
 			}(s.h, handlerFuncType, msg, paramType)
 
@@ -89,17 +92,17 @@ func (mm *PubsubMem) Publish(ctx context.Context, msg EventOrMessage) error {
 
 			go func(h HandlerFunc, handlerFuncType reflect.Type, parsed interface{}) {
 				fn := reflect.ValueOf(h).Convert(handlerFuncType)
-				fn.Call([]reflect.Value{reflect.ValueOf(parsed).Elem()})
+				fn.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(parsed).Elem()})
 				mm.wg.Done()
 			}(s.h, handlerFuncType, param)
 
 			continue
 		}
 
-		err = multierror.Append(err, ErrParamConversionFailed)
+		mErr = multierror.Append(mErr, ErrParamConversionFailed)
 	}
 
-	return err.ErrorOrNil() //nolint:wrapcheck // allow the multierror to be returned.
+	return mErr.ErrorOrNil() //nolint:wrapcheck // allow the multierror to be returned.
 }
 
 func (mm *PubsubMem) Subscribe(eom EventOrMessage, h HandlerFunc) (*Subscriber, error) {
