@@ -1,9 +1,8 @@
 package message_test
 
 import (
-	"bytes"
 	"context"
-	"math/rand"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -13,86 +12,159 @@ import (
 	"github.com/HTechHQ/message"
 )
 
-const (
-	validTopic   = "1337"
-	validMessage = "message"
-)
-
 func TestMagic_mem_Subscribe(t *testing.T) {
 	t.Parallel()
+
+	t.Run("fail, if EventOrMessage is invalid", func(t *testing.T) {
+		t.Parallel()
+
+		p := message.NewPubsubMem()
+
+		// invalid EventOrMessage parameters
+		_, err := p.Subscribe(nil, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = p.Subscribe("", validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = p.Subscribe(0, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = p.Subscribe([]int{}, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = p.Subscribe(struct{}{}, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		_, err = p.Subscribe(struct{ name string }{}, validEmptyHandlerFunc)
+		assert.Error(t, err)
+		assert.Equal(t, message.ErrInvalidEvent, err)
+
+		// valid EventOrMessage parameters
+		_, err = p.Subscribe(simpleEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+
+		_, err = p.Subscribe(eventOrTopicStructEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+
+		_, err = p.Subscribe(validSliceEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+	})
+
+	t.Run("subscribe via an implemented EventOrTopic-interface name", func(t *testing.T) {
+		t.Parallel()
+
+		p := message.NewPubsubMem()
+
+		_, err := p.Subscribe(eventOrTopicStructEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, p.NumSubs(eventOrTopicStructEvent{}))
+	})
+
+	t.Run("subscribe via an struct type as name", func(t *testing.T) {
+		t.Parallel()
+
+		p := message.NewPubsubMem()
+
+		_, err := p.Subscribe(simpleEvent{}, validEmptyHandlerFunc)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, p.NumSubs(simpleEvent{}))
+	})
+
+	t.Run("ensure HandlerFunc is func and signature has two arguments with first ctx and no returns", func(t *testing.T) {
+		t.Parallel()
+
+		p := message.NewPubsubMem()
+
+		_, err := p.Subscribe(simpleEvent{}, 0)
+		assert.Error(t, err)
+
+		_, err = p.Subscribe(simpleEvent{}, "")
+		assert.Error(t, err)
+
+		_, err = p.Subscribe(simpleEvent{}, func() {})
+		assert.Error(t, err)
+
+		_, err = p.Subscribe(simpleEvent{}, func(msg []byte, str string) {})
+		assert.Error(t, err)
+
+		_, err = p.Subscribe(simpleEvent{}, func(i io.Reader, e simpleEvent) int { return 0 })
+		assert.Error(t, err)
+
+		_, err = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) int { return 0 })
+		assert.Error(t, err)
+
+		_, err = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {})
+		assert.NoError(t, err)
+	})
 
 	t.Run("subscribe 3 handlers to the same topic", func(t *testing.T) {
 		t.Parallel()
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
-		_, err0 := c.Subscribe(validTopic, func(msg []int) {})
-		_, err1 := c.Subscribe(validTopic, func(msg []byte) {})
-		_, err2 := c.Subscribe(validTopic, func(msg []string) {})
+		_, err0 := p.Subscribe(simpleEvent{}, func(ctx context.Context, msg []int) {})
+		_, err1 := p.Subscribe(simpleEvent{}, func(ctx context.Context, msg []byte) {})
+		_, err2 := p.Subscribe(simpleEvent{}, func(ctx context.Context, msg []string) {})
 
 		assert.NoError(t, err0)
 		assert.NoError(t, err1)
 		assert.NoError(t, err2)
-		assert.Equal(t, 3, c.NumSubs(validTopic))
-	})
-
-	t.Run("ensure HandlerFunc is func and signature has one argument and no returns", func(t *testing.T) {
-		t.Parallel()
-
-		c := message.NewPubsubMem()
-
-		_, err := c.Subscribe(validTopic, 0)
-		assert.Error(t, err)
-
-		_, err = c.Subscribe(validTopic, func() {})
-		assert.Error(t, err)
-
-		_, err = c.Subscribe(validTopic, func(msg []byte, str string) {})
-		assert.Error(t, err)
-
-		_, err = c.Subscribe(validTopic, func(msg []byte) int { return 0 })
-		assert.Error(t, err)
+		assert.Equal(t, 3, p.NumSubs(simpleEvent{}))
 	})
 
 	t.Run("subscribe safely concurrently", func(t *testing.T) {
 		t.Parallel()
 
-		const wantedSubscribers = 1000
-
-		c := message.NewPubsubMem()
-
 		var wg sync.WaitGroup
+
+		p := message.NewPubsubMem()
 
 		wg.Add(wantedSubscribers)
 		for i := 0; i < wantedSubscribers; i++ {
 			go func(wg *sync.WaitGroup) {
-				_, _ = c.Subscribe(validTopic, func(msg []byte) {})
+				_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, msg []byte) {})
 				wg.Done()
 			}(&wg)
 		}
 		wg.Wait()
 
-		assert.Equal(t, wantedSubscribers, c.NumSubs(validTopic))
+		assert.Equal(t, wantedSubscribers, p.NumSubs(simpleEvent{}))
 	})
 }
 
 func TestMagic_mem_Publish(t *testing.T) {
 	t.Parallel()
 
+	t.Run("invalid EventOrMessage", func(t *testing.T) {
+		t.Parallel()
+
+		p := message.NewPubsubMem()
+
+		err := p.Publish(ctx, "")
+		assert.Error(t, err)
+	})
+
 	t.Run("single publish", func(t *testing.T) {
 		t.Parallel()
 
 		var wg sync.WaitGroup
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		wg.Add(1)
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
-			assert.Equal(t, []byte(validMessage), msg)
+		_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
+			assert.Equal(t, simpleEvent{}, e)
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		err := p.Publish(ctx, simpleEvent{})
+		assert.NoError(t, err)
 
 		wg.Wait()
 	})
@@ -102,91 +174,74 @@ func TestMagic_mem_Publish(t *testing.T) {
 
 		var wg sync.WaitGroup
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		wg.Add(2)
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
-			assert.Equal(t, []byte(validMessage), msg)
+		_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
+			assert.Equal(t, simpleEvent{}, e)
 			wg.Done()
 		})
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
-			assert.Equal(t, []byte(validMessage), msg)
+		_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
+			assert.Equal(t, simpleEvent{}, e)
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		err := p.Publish(ctx, simpleEvent{})
+		assert.NoError(t, err)
 
 		wg.Wait()
 	})
 
-	t.Run("ensure automatic parameter casting", func(t *testing.T) {
-		t.Parallel()
-
-		var (
-			wg sync.WaitGroup
-			mu sync.Mutex
-			b  bytes.Buffer
-		)
-
-		c := message.NewPubsubMem()
-
-		wg.Add(2)
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
-			mu.Lock()
-			defer mu.Unlock()
-
-			b.Write(msg)
-			wg.Done()
-		})
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {})
-
-		err0 := c.Publish(validTopic, []byte("."))
-		err1 := c.Publish(validTopic, ".")
-		err2 := c.Publish(validTopic, 1)
-
-		wg.Wait()
-
-		assert.NoError(t, err0)
-		assert.NoError(t, err1)
-
-		assert.Error(t, err2)
-		assert.Contains(t, err2.Error(), "2 errors occurred")
-
-		assert.Equal(t, "..", b.String())
-	})
-
-	t.Run("ensure structs are converted", func(t *testing.T) {
+	t.Run("ensure ctx is handed over from publisher to subscriber", func(t *testing.T) {
 		t.Parallel()
 
 		var wg sync.WaitGroup
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
+		wg.Add(1)
+		_, _ = p.Subscribe(simpleStruct{}, func(ctx context.Context, e simpleStruct) {
+			assert.Equal(t, ctxVal, ctx.Value(ctxKey))
+			wg.Done()
+		})
+
+		ctxWithVal := context.WithValue(context.Background(), ctxKey, ctxVal)
+		_ = p.Publish(ctxWithVal, simpleStruct{})
+
+		wg.Wait()
+	})
+
+	t.Run("ensure structs are converted, once they have the same EventOrTopic name", func(t *testing.T) {
+		t.Parallel()
+
+		var wg sync.WaitGroup
 		now, _ := time.Parse(time.RFC822, "01 Jan 15 10:00 UTC")
 
+		p := message.NewPubsubMem()
+
 		wg.Add(4)
-		_, _ = c.Subscribe(validTopic, func(e newUserRegisteredEvent) {
+		_, _ = p.Subscribe(newUserRegisteredEvent{}, func(ctx context.Context, e newUserRegisteredEvent) {
 			assert.Equal(t, "user name", e.Username)
 			assert.Equal(t, "test@example.com", e.Email)
 			assert.Equal(t, []string{"s0", "s1"}, e.Settings)
 			wg.Done()
 		})
-		_, _ = c.Subscribe(validTopic, func(e newUserAuditLogEvent) {
+		_, _ = p.Subscribe(newUserAuditLogEvent{}, func(ctx context.Context, e newUserAuditLogEvent) {
 			assert.Equal(t, "user name", e.Username)
 			assert.Equal(t, now, e.CreatedAt)
 			wg.Done()
 		})
-		_, _ = c.Subscribe(validTopic, func(e newUserWelcomeEmailEvent) {
+		_, _ = p.Subscribe(newUserWelcomeEmailEvent{}, func(ctx context.Context, e newUserWelcomeEmailEvent) {
 			assert.Equal(t, "user name", e.Username)
 			assert.Equal(t, "test@example.com", e.Email)
 			wg.Done()
 		})
-		_, _ = c.Subscribe(validTopic, func(e shareNothingWithEvents) {
+		_, _ = p.Subscribe(shareNothingWithEvents{}, func(ctx context.Context, e shareNothingWithEvents) {
 			assert.Equal(t, shareNothingWithEvents{}, e)
 			wg.Done()
 		})
 
-		err := c.Publish(validTopic, newUserRegisteredEvent{
+		err := p.Publish(ctx, newUserRegisteredEvent{
 			Username:  "user name",
 			Email:     "test@example.com",
 			CreatedAt: now,
@@ -197,55 +252,34 @@ func TestMagic_mem_Publish(t *testing.T) {
 		wg.Wait()
 	})
 
-	t.Run("ensure non primitiv conversion happens only between structs", func(t *testing.T) {
-		t.Parallel()
-
-		var (
-			wg sync.WaitGroup
-			b  bytes.Buffer
-		)
-
-		c := message.NewPubsubMem()
-
-		wg.Add(0)
-		_, _ = c.Subscribe(validTopic, func(e newUserWelcomeEmailEvent) {
-			b.Write([]byte("called subscriber which should not happen"))
-			wg.Done()
-		})
-
-		err := c.Publish(validTopic, []byte(validMessage))
-
-		wg.Wait()
-		assert.Error(t, err)
-		assert.Equal(t, "", b.String())
-	})
-
 	t.Run("publish safely concurrently", func(t *testing.T) {
 		t.Parallel()
 
 		var (
 			wg sync.WaitGroup
-			b  safeBuffer
+			mu sync.Mutex
+			n  int
 		)
 
-		const wantedPublisher = 1000
+		p := message.NewPubsubMem()
 
-		c := message.NewPubsubMem()
+		_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
+			mu.Lock()
+			defer mu.Unlock()
 
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
-			_, _ = b.Write(msg)
+			n++
 			wg.Done()
 		})
 
-		wg.Add(wantedPublisher)
-		for i := 0; i < wantedPublisher; i++ {
+		wg.Add(wantedPublishers)
+		for i := 0; i < wantedPublishers; i++ {
 			go func() {
-				_ = c.Publish(validTopic, []byte("."))
+				_ = p.Publish(ctx, simpleEvent{})
 			}()
 		}
 
 		wg.Wait()
-		assert.Equal(t, wantedPublisher, b.Len())
+		assert.Equal(t, wantedPublishers, n)
 	})
 
 	t.Run("publish safely concurrently while subscribers grow", func(t *testing.T) {
@@ -253,40 +287,25 @@ func TestMagic_mem_Publish(t *testing.T) {
 
 		var wg sync.WaitGroup
 
-		const wantedPublisher = 1000
-		const wantedSubscribers = 1000
-
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		go func() { // subscribe while also publishing
 			for i := 0; i < wantedSubscribers; i++ {
-				_, _ = c.Subscribe(validTopic, func(msg []byte) {
+				_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
 				})
 			}
 		}()
 
-		wg.Add(wantedPublisher)
-		for i := 0; i < wantedPublisher; i++ {
+		wg.Add(wantedPublishers)
+		for i := 0; i < wantedPublishers; i++ {
 			go func() {
-				_ = c.Publish(validTopic, []byte("."))
+				_ = p.Publish(ctx, simpleEvent{})
 				wg.Done()
 			}()
 		}
+
 		wg.Wait()
 	})
-}
-
-func BenchmarkMagic_mem_Publish(b *testing.B) {
-	c := message.NewPubsubMem()
-
-	_, _ = c.Subscribe(validTopic, func(msg []byte) {
-		time.Sleep(20 * time.Millisecond) // slow worker
-	})
-
-	for i := 0; i < b.N; i++ {
-		_ = c.Publish(validTopic, []byte(""))
-		_ = c.Publish(validTopic, newUserRegisteredEvent{})
-	}
 }
 
 func TestMagic_mem_Shutdown(t *testing.T) {
@@ -297,41 +316,42 @@ func TestMagic_mem_Shutdown(t *testing.T) {
 
 		var wg sync.WaitGroup
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		wg.Add(2)
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
+		_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
 			time.Sleep(20 * time.Millisecond)
-			assert.Equal(t, []byte(validMessage), msg)
+			assert.Equal(t, simpleEvent{}, e)
 			wg.Done()
 		})
-		_, _ = c.Subscribe(validTopic, func(e newUserRegisteredEvent) {
+		_, _ = p.Subscribe(newUserRegisteredEvent{}, func(ctx context.Context, e newUserRegisteredEvent) {
 			time.Sleep(20 * time.Millisecond)
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
-		_ = c.Publish(validTopic, newUserRegisteredEvent{Username: "user"})
+		_ = p.Publish(ctx, simpleEvent{})
+		_ = p.Publish(ctx, newUserRegisteredEvent{Username: "user"})
 
-		c.Shutdown(context.TODO())
+		p.Shutdown(ctx)
 		wg.Wait()
 	})
 
 	t.Run("shutdown with timeout", func(t *testing.T) {
 		t.Parallel()
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		hasProcessed := false
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
+
+		_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
 			time.Sleep(2 * time.Second)
 			hasProcessed = true
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = p.Publish(ctx, simpleEvent{})
 
-		ctxShutDown, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		c.Shutdown(ctxShutDown)
+		ctxShutDown, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+		p.Shutdown(ctxShutDown)
 
 		assert.Equal(t, false, hasProcessed)
 		cancel()
@@ -340,26 +360,27 @@ func TestMagic_mem_Shutdown(t *testing.T) {
 	t.Run("call shutdown safely concurrently", func(t *testing.T) {
 		t.Parallel()
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		hasProcessed := false
-		_, _ = c.Subscribe(validTopic, func(msg []byte) {
+
+		_, _ = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
 			time.Sleep(2 * time.Second)
 			hasProcessed = true
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = p.Publish(ctx, simpleEvent{})
 
 		for i := 0; i < 5; i++ {
 			go func(i int) {
 				ctxShutDown, cancel := context.WithTimeout(context.Background(), time.Duration(i)*10*time.Millisecond)
-				c.Shutdown(ctxShutDown)
+				p.Shutdown(ctxShutDown)
 				cancel()
 			}(i)
 		}
 
 		ctxShutDown, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		c.Shutdown(ctxShutDown)
+		p.Shutdown(ctxShutDown)
 
 		assert.Equal(t, false, hasProcessed)
 		cancel()
@@ -374,23 +395,27 @@ func TestSubscriber_Unsubscribe(t *testing.T) {
 
 		var (
 			wg sync.WaitGroup
-			b  bytes.Buffer
+			mu sync.Mutex
+			n  int
 		)
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		wg.Add(1)
-		sub, _ := c.Subscribe(validTopic, func(msg []byte) {
-			b.Write(msg)
+		sub, _ := p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
+			mu.Lock()
+			defer mu.Unlock()
+
+			n++
 			wg.Done()
 		})
 
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = p.Publish(ctx, simpleEvent{})
 		sub.Unsubscribe()
-		_ = c.Publish(validTopic, []byte(validMessage))
+		_ = p.Publish(ctx, simpleEvent{})
 
 		wg.Wait()
-		assert.Equal(t, validMessage, b.String())
+		assert.Equal(t, 1, n)
 	})
 
 	t.Run("unsubscribe safely concurrently", func(t *testing.T) {
@@ -401,20 +426,18 @@ func TestSubscriber_Unsubscribe(t *testing.T) {
 			mu sync.Mutex
 		)
 
-		const wantedSubscribers = 1000
-
 		subs := make(map[int]*message.Subscriber, wantedSubscribers)
 
-		c := message.NewPubsubMem()
+		p := message.NewPubsubMem()
 
 		wg.Add(wantedSubscribers)
 		for i := 0; i < wantedSubscribers; i++ {
 			go func(w *sync.WaitGroup, i int) {
-				sub, _ := c.Subscribe(validTopic, func(msg []byte) {})
-
 				mu.Lock()
+				defer mu.Unlock()
+
+				sub, _ := p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {})
 				subs[i] = sub
-				mu.Unlock()
 
 				w.Done()
 			}(&wg, i)
@@ -428,94 +451,43 @@ func TestSubscriber_Unsubscribe(t *testing.T) {
 				wg.Done()
 			}(&wg, sub)
 		}
-		wg.Wait()
 
-		assert.Equal(t, 0, c.NumSubs(validTopic))
+		wg.Wait()
+		assert.Equal(t, 0, p.NumSubs(simpleEvent{}))
 	})
 }
 
-func BenchmarkThrouputMagicMem(b *testing.B) {
-	const workers = 100
+/*
+	func BenchmarkMagic_mem_Publish(b *testing.B) {
+		c := message.NewPubsubMem()
 
-	topic := getRandomTopic()
-
-	c := message.NewPubsubMem()
-
-	for i := 0; i < workers; i++ {
-		_, _ = c.Subscribe(topic(), func(msg []byte) {
-			time.Sleep(200 * time.Millisecond) // slow worker
+		_, _ = c.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
+			time.Sleep(20 * time.Millisecond) // slow worker
 		})
+
+		for i := 0; i < b.N; i++ {
+			_ = c.Publish(ctx, simpleEvent{})
+			// _ = c.Publish(ctx, newUserRegisteredEvent{})
+		}
 	}
 
-	for i := 0; i < b.N; i++ {
-		go func() {
-			_ = c.Publish(topic(), []byte(""))
-		}()
+	func BenchmarkThrouputMagicMem(b *testing.B) {
+		const workers = 100
+
+		topic := getRandomTopic()
+
+		c := message.NewPubsubMem()
+
+		for i := 0; i < workers; i++ {
+			_, _ = c.Subscribe(topic(), func(msg []byte) {
+				time.Sleep(200 * time.Millisecond) // slow worker
+			})
+		}
+
+		for i := 0; i < b.N; i++ {
+			go func() {
+				_ = c.Publish(ctx, []byte(""))
+			}()
+		}
 	}
-}
-
-func getRandomTopic() func() string {
-	mu := sync.Mutex{}
-	t := []string{"s", "e", "e", "d"}
-
-	return func() string {
-		mu.Lock()
-
-		/*r := rand.Int()
-		neuTopic := strconv.Itoa(r)
-
-		if r%100 == 0 {
-			t = append(t, neuTopic)
-		}*/
-		elem := t[rand.Intn(len(t))] //nolint:gosec
-
-		mu.Unlock()
-
-		return elem
-	}
-}
-
-type newUserRegisteredEvent struct {
-	Username  string    `json:"userName,omitempty"`
-	Email     string    `json:"email,omitempty"`
-	CreatedAt time.Time `json:"createdAt,omitempty"`
-	Settings  []string  `json:"settings,omitempty"`
-}
-
-type newUserAuditLogEvent struct {
-	Username  string    `json:"userName,omitempty"`
-	CreatedAt time.Time `json:"createdAt,omitempty"`
-	Settings  []string  `json:"settings,omitempty"`
-}
-
-type newUserWelcomeEmailEvent struct {
-	Username string `json:"userName,omitempty"`
-	Email    string `json:"email,omitempty"`
-}
-
-type shareNothingWithEvents struct {
-	Name string `json:"name,omitempty"`
-}
-
-// safeBuffer is a goroutine safe bytes.Buffer.
-type safeBuffer struct {
-	buffer bytes.Buffer
-	mutex  sync.Mutex
-}
-
-// Write appends the contents of p to the buffer, growing the buffer as needed. It returns
-// the number of bytes written.
-func (s *safeBuffer) Write(p []byte) (int, error) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return s.buffer.Write(p) //nolint:wrapcheck // ignore for this simple test helper.
-}
-
-// Len returns the length of the buffer.
-func (s *safeBuffer) Len() int {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return s.buffer.Len()
-}
+*/

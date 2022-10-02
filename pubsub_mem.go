@@ -11,7 +11,7 @@ import (
 
 type Subscriber struct {
 	pubsub *PubsubMem
-	topic  string
+	topic  EventOrTopicName
 	h      HandlerFunc
 }
 
@@ -21,7 +21,7 @@ type PubsubMem struct {
 	mu sync.Mutex
 	wg sync.WaitGroup
 
-	subs map[string][]*Subscriber
+	subs map[EventOrTopicName][]*Subscriber
 }
 
 var _ PubSub = (*PubsubMem)(nil)
@@ -31,45 +31,52 @@ func NewPubsubMem() *PubsubMem {
 	m := &PubsubMem{
 		mu:   sync.Mutex{},
 		wg:   sync.WaitGroup{},
-		subs: make(map[string][]*Subscriber),
+		subs: make(map[EventOrTopicName][]*Subscriber),
 	}
 
 	return m
 }
 
-func (mm *PubsubMem) NumSubs(topic string) int {
-	return len(mm.subs[topic])
+func (mm *PubsubMem) NumSubs(eom EventOrMessage) int {
+	eot, _ := getEventOrTopicName(eom)
+
+	return len(mm.subs[eot])
 }
 
-func (mm *PubsubMem) Publish(topic string, msg Message) error {
+func (mm *PubsubMem) Publish(ctx context.Context, eom EventOrMessage) error {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 
-	var err *multierror.Error
+	topic, err := getEventOrTopicName(eom)
+	if err != nil {
+		return err
+	}
+
+	var mErr *multierror.Error
 
 	for _, s := range mm.subs[topic] {
 		handlerFuncType := reflect.TypeOf(s.h)
-		paramType := handlerFuncType.In(0)
+		paramType := handlerFuncType.In(1)
 
-		if reflect.TypeOf(msg).ConvertibleTo(paramType) {
+		if reflect.TypeOf(eom).ConvertibleTo(paramType) {
 			mm.wg.Add(1)
 
-			go func(h HandlerFunc, handlerFuncType reflect.Type, msg Message, paramType reflect.Type) {
+			go func(h HandlerFunc, handlerFuncType reflect.Type, msg EventOrMessage, paramType reflect.Type) {
 				fn := reflect.ValueOf(h).Convert(handlerFuncType)
-				fn.Call([]reflect.Value{reflect.ValueOf(msg).Convert(paramType)})
+				fn.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(msg).Convert(paramType)})
 				mm.wg.Done()
-			}(s.h, handlerFuncType, msg, paramType)
+			}(s.h, handlerFuncType, eom, paramType)
 
 			continue
 		}
 
 		switch paramType.Kind() { //nolint:exhaustive
 		case reflect.Struct:
-			if reflect.TypeOf(msg).Kind() != reflect.Struct {
+			if reflect.TypeOf(eom).Kind() != reflect.Struct {
 				break
 			}
 
-			b, err2 := json.Marshal(msg)
+			b, err2 := json.Marshal(eom)
 			if err2 != nil {
 				break
 			}
@@ -85,33 +92,50 @@ func (mm *PubsubMem) Publish(topic string, msg Message) error {
 
 			go func(h HandlerFunc, handlerFuncType reflect.Type, parsed interface{}) {
 				fn := reflect.ValueOf(h).Convert(handlerFuncType)
-				fn.Call([]reflect.Value{reflect.ValueOf(parsed).Elem()})
+				fn.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(parsed).Elem()})
 				mm.wg.Done()
 			}(s.h, handlerFuncType, param)
 
 			continue
 		}
 
-		err = multierror.Append(err, ErrParamConversionFailed)
+		mErr = multierror.Append(mErr, ErrParamConversionFailed)
 	}
 
-	return err.ErrorOrNil() //nolint:wrapcheck // allow the multierror to be returned.
+	return mErr.ErrorOrNil() //nolint:wrapcheck // allow the multierror to be returned.
 }
 
-func (mm *PubsubMem) Subscribe(topic string, h HandlerFunc) (*Subscriber, error) {
+func (mm *PubsubMem) Subscribe(eom EventOrMessage, h HandlerFunc) (*Subscriber, error) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 
+	topic, err := getEventOrTopicName(eom)
+	if err != nil {
+		return nil, err
+	}
+
 	handlerFunc := reflect.TypeOf(h)
 
+	// ensure handlerFunc is indeed a function
 	if handlerFunc.Kind() != reflect.Func {
 		return nil, ErrInvalidHandler
 	}
 
-	if handlerFunc.NumIn() != 1 {
+	// ensure handlerFunc has two parameters
+	if handlerFunc.NumIn() != 2 { //nolint:gomnd
 		return nil, ErrInvalidHandler
 	}
 
+	// ensure the first parameter is of type context.Context
+	if handlerFunc.In(0).Kind() != reflect.Interface {
+		return nil, ErrInvalidHandler
+	}
+
+	if handlerFunc.In(0).PkgPath() != "context" && handlerFunc.In(0).Name() != "Context" {
+		return nil, ErrInvalidHandler
+	}
+
+	// ensure handlerFunc has no return parameters
 	if handlerFunc.NumOut() != 0 {
 		return nil, ErrInvalidHandler
 	}
@@ -153,4 +177,31 @@ func (s *Subscriber) Unsubscribe() {
 			s.pubsub.subs[sTopic] = append(s.pubsub.subs[sTopic][:i], s.pubsub.subs[sTopic][i+1:]...)
 		}
 	}
+}
+
+// getEventOrTopicName returns a name for an event or message topic.
+// If the parameter implements the EventOrTopic interface, then that name is returned as the EventOrTopicName.
+// Otherwise, it is expected, that the EventOrMessage is a struct and the name of that type is returned.
+func getEventOrTopicName(eom EventOrMessage) (EventOrTopicName, error) {
+	if eom == nil {
+		return "", ErrInvalidEvent
+	}
+
+	eot, ok := eom.(EventOrTopic)
+	if ok {
+		return eot.EventOrTopicName(), nil
+	}
+
+	// ensure primitive data types like string or int are not allowed
+	typeOf := reflect.TypeOf(eom)
+	if typeOf.Kind() != reflect.Struct {
+		return "", ErrInvalidEvent
+	}
+
+	structTypeName := reflect.TypeOf(eom).Name()
+	if structTypeName == "" {
+		return "", ErrInvalidEvent
+	}
+
+	return EventOrTopicName(structTypeName), nil
 }
