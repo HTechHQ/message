@@ -43,11 +43,11 @@ func (mm *PubsubMem) NumSubs(eom EventOrMessage) int {
 	return len(mm.subs[eot])
 }
 
-func (mm *PubsubMem) Publish(ctx context.Context, msg EventOrMessage) error {
+func (mm *PubsubMem) Publish(ctx context.Context, eom EventOrMessage) error {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 
-	topic, err := getEventOrTopicName(msg)
+	topic, err := getEventOrTopicName(eom)
 	if err != nil {
 		return err
 	}
@@ -58,25 +58,25 @@ func (mm *PubsubMem) Publish(ctx context.Context, msg EventOrMessage) error {
 		handlerFuncType := reflect.TypeOf(s.h)
 		paramType := handlerFuncType.In(1)
 
-		if reflect.TypeOf(msg).ConvertibleTo(paramType) {
+		if reflect.TypeOf(eom).ConvertibleTo(paramType) {
 			mm.wg.Add(1)
 
 			go func(h HandlerFunc, handlerFuncType reflect.Type, msg EventOrMessage, paramType reflect.Type) {
 				fn := reflect.ValueOf(h).Convert(handlerFuncType)
 				fn.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(msg).Convert(paramType)})
 				mm.wg.Done()
-			}(s.h, handlerFuncType, msg, paramType)
+			}(s.h, handlerFuncType, eom, paramType)
 
 			continue
 		}
 
 		switch paramType.Kind() { //nolint:exhaustive
 		case reflect.Struct:
-			if reflect.TypeOf(msg).Kind() != reflect.Struct {
+			if reflect.TypeOf(eom).Kind() != reflect.Struct {
 				break
 			}
 
-			b, err2 := json.Marshal(msg)
+			b, err2 := json.Marshal(eom)
 			if err2 != nil {
 				break
 			}

@@ -2,6 +2,7 @@ package message_test
 
 import (
 	"context"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -92,6 +93,9 @@ func TestMagic_mem_Subscribe(t *testing.T) {
 		_, err = p.Subscribe(simpleEvent{}, func(msg []byte, str string) {})
 		assert.Error(t, err)
 
+		_, err = p.Subscribe(simpleEvent{}, func(i io.Reader, e simpleEvent) int { return 0 })
+		assert.Error(t, err)
+
 		_, err = p.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) int { return 0 })
 		assert.Error(t, err)
 
@@ -136,6 +140,15 @@ func TestMagic_mem_Subscribe(t *testing.T) {
 
 func TestMagic_mem_Publish(t *testing.T) {
 	t.Parallel()
+
+	t.Run("invalid EventOrMessage", func(t *testing.T) {
+		t.Parallel()
+
+		p := message.NewPubsubMem()
+
+		err := p.Publish(ctx, "")
+		assert.Error(t, err)
+	})
 
 	t.Run("single publish", func(t *testing.T) {
 		t.Parallel()
