@@ -20,6 +20,9 @@ const (
 var (
 	ctx                   = context.Background()
 	validEmptyHandlerFunc = func(ctx context.Context, e simpleEvent) {}
+
+	ctxKey = struct{}{}
+	ctxVal = "some-value"
 )
 
 type (

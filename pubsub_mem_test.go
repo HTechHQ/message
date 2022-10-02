@@ -188,11 +188,11 @@ func TestMagic_mem_Publish(t *testing.T) {
 
 		wg.Add(1)
 		_, _ = p.Subscribe(simpleStruct{}, func(ctx context.Context, e simpleStruct) {
-			assert.Equal(t, "value", ctx.Value("key"))
+			assert.Equal(t, ctxVal, ctx.Value(ctxKey))
 			wg.Done()
 		})
 
-		ctxWithVal := context.WithValue(context.Background(), "key", "value")
+		ctxWithVal := context.WithValue(context.Background(), ctxKey, ctxVal)
 		_ = p.Publish(ctxWithVal, simpleStruct{})
 
 		wg.Wait()
@@ -295,20 +295,6 @@ func TestMagic_mem_Publish(t *testing.T) {
 	})
 }
 
-/*
-	func BenchmarkMagic_mem_Publish(b *testing.B) {
-		c := message.NewPubsubMem()
-
-		_, _ = c.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
-			time.Sleep(20 * time.Millisecond) // slow worker
-		})
-
-		for i := 0; i < b.N; i++ {
-			_ = c.Publish(ctx, simpleEvent{})
-			// _ = c.Publish(ctx, newUserRegisteredEvent{})
-		}
-	}
-*/
 func TestMagic_mem_Shutdown(t *testing.T) {
 	t.Parallel()
 
@@ -459,6 +445,19 @@ func TestSubscriber_Unsubscribe(t *testing.T) {
 }
 
 /*
+	func BenchmarkMagic_mem_Publish(b *testing.B) {
+		c := message.NewPubsubMem()
+
+		_, _ = c.Subscribe(simpleEvent{}, func(ctx context.Context, e simpleEvent) {
+			time.Sleep(20 * time.Millisecond) // slow worker
+		})
+
+		for i := 0; i < b.N; i++ {
+			_ = c.Publish(ctx, simpleEvent{})
+			// _ = c.Publish(ctx, newUserRegisteredEvent{})
+		}
+	}
+
 	func BenchmarkThrouputMagicMem(b *testing.B) {
 		const workers = 100
 
