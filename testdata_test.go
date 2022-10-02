@@ -19,7 +19,7 @@ const (
 
 var (
 	ctx                   = context.Background()
-	validEmptyHandlerFunc = func(ctx context.Context, e string) {}
+	validEmptyHandlerFunc = func(ctx context.Context, e simpleEvent) {}
 )
 
 type (
