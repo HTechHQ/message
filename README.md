@@ -62,12 +62,12 @@ provides an in memory reference implementation.
 
 
 
-## The Interface
+## [The Interface](pubsub.go)
 ```go
 type PubSub interface {
-	Publish(topic Topic, msg Message) error
-	Subscribe(topic Topic, h HandlerFunc) (*Subscriber, error)
-	Shutdown(ctx context.Context)
+    Publish(ctx context.Context, eom EventOrMessage) error
+    Subscribe(eom EventOrMessage, h HandlerFunc) (*Subscriber, error)
+    Shutdown(ctx context.Context)
 }
 ```
 
@@ -80,69 +80,68 @@ $ go get -u github.com/HTechHQ/message
 ```
 
 
-[Publish-Subscribe with primitive data types](examples/pubsub-message/main.go)
+[Publish-Subscribe with messages](examples/pubsub-message/main.go)
 ```go
 func main() {
-    c := message.NewPubsubMem()
-
-    sub, _ := c.Subscribe("topic-name", func(msg []byte) {
-        fmt.Println(string(msg))
+    p := message.NewPubsubMem()
+    ctx := context.Background()
+   
+    sub, _ := p.Subscribe(helloMessage{}, func(ctx context.Context, msg helloMessage) {
+        fmt.Println(msg.Message)
     })
-
-    c.Publish("topic-name", []byte("hello world!"))
+   
+    p.Publish(ctx, helloMessage{"hello world!"})
     sub.Unsubscribe()
-    c.Publish("topic-name", []byte("hello world!"))
-
-    c.Shutdown(context.TODO())
+    p.Publish(ctx, helloMessage{"hello world!"})
+   
+    p.Shutdown(ctx)
     // output: hello world!
 }
+
+// helloMessage is a message passed from a publisher to potentially many subscribers.
+type helloMessage struct {
+    Message string
+}
+
 ```
 
 
-[Publish-Subscribe with domain events](examples/pubsub-events-conversion/main.go)
+[Publish-Subscribe with domain events](examples/pubsub-events/main.go)
 ```go
 func main() {
-	c := message.NewPubsubMem()
-	topic := "user-registration"
+    var publisher message.PubSub = message.NewPubsubMem()
 
-	c.Subscribe(topic, func(e newUserAuditLogEvent) {
-		fmt.Println(e.Username, e.Settings, e.CreatedAt.Format("2006.01.02"))
-	})
-	c.Subscribe(topic, func(e newUserWelcomeEmailEvent) {
-		fmt.Println(e.Name, e.Email)
-	})
+    publisher.Subscribe(newUserRegistered{}, func(ctx context.Context, e newUserRegistered) {
+        // log the registration of the new user
+        fmt.Println(e.Username, e.Email, e.Settings, e.CreatedAt.Format("2006.01.02"))
+    })
+    publisher.Subscribe(newUserRegistered{}, func(ctx context.Context, e newUserRegistered) {
+        fmt.Printf("Preparing welcome email for new user: %s to: %s\n", e.Username, e.Email)
+     })
 
-	c.Publish(topic, newUserRegisteredEvent{
-		Username:  "Max",
-		Email:     "max@example.com",
-		CreatedAt: time.Now(),
-		Settings:  []string{"setting"},
-	})
+    publisher.Publish(context.Background(), newUserRegistered{
+        Username:  "Max",
+        Email:     "max@example.com",
+        CreatedAt: time.Now(),
+        Settings:  []string{"setting"},
+    })
 
-	c.Shutdown(context.TODO())
-	// output:
-	// Max [setting] 2021.04.25
-	// Max max@example.com
+    publisher.Shutdown(context.Background())
+    // output:
+    // Max [setting] 2021.04.25
+    // Preparing welcome email for new user: Max to: max@example.com
 }
 
-type newUserRegisteredEvent struct {
-   Username  string
-   Email     string
-   CreatedAt time.Time
-   Settings  []string
-}
-
-type newUserAuditLogEvent struct {
-   Username  string
-   CreatedAt time.Time
-   Settings  []string
-}
-
-type newUserWelcomeEmailEvent struct {
-   Name  string `json:"UserName"`
-   Email string
+// newUserRegistered is the actual event that's fired after a new user got registered.
+type newUserRegistered struct {
+    Username  string
+    Email     string
+    CreatedAt time.Time
+    Settings  []string
 }
 ```
+
+See [all examples](examples/)
 
 
 

@@ -7,11 +7,6 @@ import (
 	"github.com/HTechHQ/message"
 )
 
-// helloMessage is a message passed from a publisher to potentially many subscribers.
-type helloMessage struct {
-	Message string
-}
-
 func main() {
 	p := message.NewPubsubMem()
 	ctx := context.Background()
@@ -24,6 +19,11 @@ func main() {
 	sub.Unsubscribe()
 	p.Publish(ctx, helloMessage{"hello world!"})
 
-	p.Shutdown(context.TODO())
+	p.Shutdown(ctx)
 	// output: hello world!
+}
+
+// helloMessage is a message passed from a publisher to potentially many subscribers.
+type helloMessage struct {
+	Message string
 }

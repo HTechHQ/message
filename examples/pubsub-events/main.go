@@ -8,14 +8,6 @@ import (
 	"github.com/HTechHQ/message"
 )
 
-// newUserRegistered is the actual event that's fired after a new user got registered.
-type newUserRegistered struct {
-	Username  string
-	Email     string
-	CreatedAt time.Time
-	Settings  []string
-}
-
 func main() {
 	var publisher message.PubSub = message.NewPubsubMem()
 
@@ -38,4 +30,12 @@ func main() {
 	// output:
 	// Max [setting] 2021.04.25
 	// Preparing welcome email for new user: Max to: max@example.com
+}
+
+// newUserRegistered is the actual event that's fired after a new user got registered.
+type newUserRegistered struct {
+	Username  string
+	Email     string
+	CreatedAt time.Time
+	Settings  []string
 }
